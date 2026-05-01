@@ -54,6 +54,7 @@ This project addresses:
 </p>
 
 Reprojection Testing:
+**Achieved >95\% point-cloud-to-mask overlap with centroid proximity across multiple sensor configurations**
 <p align="center">
   <img src="https://github.com/user-attachments/assets/04d8a4e1-3fb3-4cde-a564-4612fea27c93" width="45%" />
   <img src="https://github.com/user-attachments/assets/fa7cd41a-ec2d-4144-b555-cdaf4a3ddca4" width="45%" />
