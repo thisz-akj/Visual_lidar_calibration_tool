@@ -48,12 +48,15 @@ This project addresses:
 
 ## Results
 
-<img width="581" height="367" alt="image" src="https://github.com/user-attachments/assets/1cfce0d2-1bd8-4906-b6da-4f01d737f1c5" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/1cfce0d2-1bd8-4906-b6da-4f01d737f1c5" width="45%" />
+  <img src="https://github.com/user-attachments/assets/fa01da7c-16a8-4230-9721-47ea01779778" width="45%" />
+</p>
 
-<img width="522" height="344" alt="image" src="https://github.com/user-attachments/assets/fa01da7c-16a8-4230-9721-47ea01779778" />
-
-<img width="422" height="449" alt="image" src="https://github.com/user-attachments/assets/04d8a4e1-3fb3-4cde-a564-4612fea27c93" />
-<img width="422" height="449" alt="image" src="https://github.com/user-attachments/assets/fa7cd41a-ec2d-4144-b555-cdaf4a3ddca4" />
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/04d8a4e1-3fb3-4cde-a564-4612fea27c93" width="45%" />
+  <img src="https://github.com/user-attachments/assets/fa7cd41a-ec2d-4144-b555-cdaf4a3ddca4" width="45%" />
+</p>
 
 
 
