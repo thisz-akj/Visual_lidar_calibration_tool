@@ -1,2 +1,50 @@
-# Visual_lidar_calibration_tool
+# Visual LiDAR Calibration Tool
+
+## Overview
+This repository implements a targetless camera–LiDAR extrinsic calibration pipeline designed for real-world robotic and autonomous systems. The system estimates the rigid transformation between a monocular camera and a 3D LiDAR sensor using synchronized ROS2 bag data, eliminating the need for calibration targets.
+
+The pipeline integrates learned feature matching, geometric optimization, and statistical refinement to produce robust and accurate calibration under challenging conditions such as noise, sparsity, dynamic scenes, and varying illumination.
+
+---
+
+## Problem Statement
+Accurate extrinsic calibration between camera and LiDAR is critical for multi-sensor perception systems used in robotics and ADAS. Traditional calibration methods rely on calibration targets, which are impractical in production environments.
+
+This project addresses:
+- Targetless calibration in unstructured environments  
+- Robust alignment under noisy and sparse LiDAR data  
+- Real-world deployment using ROS2 sensor pipelines  
+
+---
+
+## Key Features
+
+### Targetless Calibration
+- No checkerboards or fiducial markers required  
+- Works directly with natural scene geometry  
+
+### ROS2-Based Sensor Pipeline
+- Uses ROS2 bag files as primary input  
+- Supports standard topics:
+  - `/camera/image_raw`
+  - `/lidar/points`  
+- Designed for real robotic deployments  
+
+### Learned Feature Matching
+- SuperGlue-based matching for robust correspondence  
+- Handles viewpoint variation and low-texture regions  
+
+### Multi-Stage Optimization Pipeline
+- RANSAC for outlier rejection  
+- SVD-based rigid transformation initialization  
+- Non-linear optimization using Ceres Solver  
+- Final refinement using Normalized Information Distance (NID)  
+
+### Cross-Modal Validation
+- Projects LiDAR point clouds into image space  
+- Evaluates calibration using:
+  - segmentation alignment  
+  - centroid consistency  
+
+---
 
