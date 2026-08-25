@@ -18,6 +18,32 @@ This project addresses:
 - Real-world deployment using ROS2 sensor pipelines
 - Distributing the pipeline as a single portable binary instead of a multi-hour ROS2/GTSAM/Ceres source build
 
+Formally, the objective is to recover the rigid-body transform $T_{lidar}^{camera} \in SE(3)$ relating the LiDAR frame $L$ and camera frame $C$, such that a LiDAR point $p_L \in \mathbb{R}^3$ maps to the camera frame as $p_C = T_{camera}^{lidar} \, p_L$, and its pixel projection is $u = \pi(p_C)$ under the camera's intrinsic model $\pi(\cdot)$ (pinhole, fisheye, or omnidirectional). $T_{camera}^{lidar}$ has 6 degrees of freedom (3 rotation + 3 translation) and is estimated in three successive stages of increasing accuracy and decreasing convergence basin, described below.
+
+---
+
+## Method
+
+### 1. Correspondence generation
+For each synchronized LiDAR/camera pair, the accumulated LiDAR sweep is rendered into a range/intensity image via spherical projection, and 2D keypoints are matched between this LiDAR-intensity image and the camera image using **SuperGlue**, a graph-neural-network feature matcher trained for wide-baseline, low-texture correspondence. Each matched keypoint pair $(u_{cam}, u_{lidar})$ is back-projected through the stored LiDAR pixel index map to recover a 2D–3D correspondence set $\mathcal{C} = \{(u_i, p_i)\}_{i=1}^{N}$, $u_i \in \mathbb{R}^2$, $p_i \in \mathbb{R}^3$.
+
+### 2. Initial pose estimation
+The initial estimate of $T_{camera}^{lidar}$ is computed in two passes over $\mathcal{C}$:
+
+1. **RANSAC rotation search.** For each of $K$ iterations (default $K = 8192$), a minimal sample of 2 correspondences is drawn, and a closed-form least-squares rotation $R \in SO(3)$ between the corresponding camera bearing vectors and LiDAR direction vectors is recovered via the Umeyama/Kabsch SVD solution:
+   $$R = U \, \mathrm{diag}(1, 1, \det(UV^\top)) \, V^\top, \qquad U \Sigma V^\top = \mathrm{SVD}(A B^\top)$$
+   where $A, B$ are the stacked unit bearing/direction vectors. The rotation with the largest reprojection-error inlier count (default threshold: 10 px) is kept.
+2. **Nonlinear reprojection refinement.** The full $SE(3)$ pose is then refined by minimizing total reprojection error over all correspondences with a Cauchy robust loss ($c = 10$ px) via Ceres Solver, parameterizing the pose on the $SE(3)$ manifold (Sophus):
+   $$T^\star = \arg\min_{T \in SE(3)} \sum_{i=1}^{N} \rho\!\left(\lVert \pi(T \, p_i) - u_i \rVert^2\right)$$
+
+### 3. Fine registration via Normalized Information Distance (NID)
+The initial estimate is refined by directly maximizing the statistical dependency between camera image intensity and LiDAR reflectivity/intensity, without requiring further point correspondences. For a candidate pose $T$, camera pixel intensities $r$ and re-projected LiDAR intensities $s$ are jointly binned into a $B \times B$ histogram (default $B = 16$) to estimate the joint and marginal entropies $H(r,s)$, $H(r)$, $H(s)$, and hence the mutual information $I(r;s) = H(r) + H(s) - H(r,s)$. The registration objective is the **Normalized Information Distance**:
+$$\mathrm{NID}(T) = \frac{H(r,s) - I(r;s)}{H(r,s)} = 1 - \frac{I(r;s)}{H(r,s)}$$
+$\mathrm{NID} \in [0, 1]$ is minimized over $T \in SE(3)$ using either BFGS or Nelder-Mead (`--registration_type`), with bicubic B-spline interpolation of the image intensity field so the histogram — and therefore the cost — remains differentiable with respect to the projected pixel location.
+
+### 4. Cross-modal validation
+The resulting $T_{lidar}^{camera}$ is validated by re-projecting the LiDAR point cloud into the image plane and checking geometric consistency against independent visual cues (instance/segmentation masks): point-cloud-to-mask overlap ratio and centroid displacement, reported in [Results](#results) below.
+
 ---
 
 ## Key Features
@@ -175,6 +201,12 @@ The core calibration algorithm (preprocessing, SuperGlue-based matching, RANSAC/
 > Koide et al., *General, Single-shot, Target-less, and Automatic LiDAR-Camera Extrinsic Calibration Toolbox*, ICRA2023. [[PDF]](https://staff.aist.go.jp/k.koide/assets/pdf/icra2023.pdf)
 
 The AppImage packaging pipeline (`packaging/`) is an addition on top of that project to make the tool distributable as a single portable binary.
+
+## References
+
+1. K. Koide, S. Oishi, M. Yokozuka, A. Banno. *General, Single-shot, Target-less, and Automatic LiDAR-Camera Extrinsic Calibration Toolbox.* ICRA 2023. [[PDF]](https://staff.aist.go.jp/k.koide/assets/pdf/icra2023.pdf)
+2. P.-E. Sarlin, D. DeTone, T. Malisiewicz, A. Rabinovich. *SuperGlue: Learning Feature Matching with Graph Neural Networks.* CVPR 2020. [[arXiv:1911.11763]](https://arxiv.org/abs/1911.11763)
+3. S. Umeyama. *Least-Squares Estimation of Transformation Parameters Between Two Point Patterns.* IEEE TPAMI, 1991.
 
 ## License
 
