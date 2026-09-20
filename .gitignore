@@ -1,1 +1,15 @@
 site/*
+
+# Build artifacts
+build/
+install/
+log/
+*.AppImage
+
+# GUI runtime state (Dear ImGui / other layout caches)
+imgui.ini
+
+# Python
+__pycache__/
+*.pyc
+

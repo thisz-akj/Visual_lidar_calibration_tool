@@ -5,7 +5,40 @@ This repository implements a targetless camera–LiDAR extrinsic calibration pip
 
 The pipeline integrates learned feature matching, geometric optimization, and statistical refinement to produce robust and accurate calibration under challenging conditions such as noise, sparsity, dynamic scenes, and varying illumination.
 
-To make the tool usable outside of a full ROS2 development environment, this repository also includes a **packaging pipeline** (`packaging/`) that builds the entire stack — ROS2, GTSAM, Ceres, Iridescence, SuperGlue, and the calibration workspace — into a single self-contained **AppImage**, so it can be run on any Ubuntu 24.04 (or compatible) machine without a ROS2 install.
+Two ways to run it ship in this repository:
+- A **desktop GUI** (`gui/`) — one button per pipeline stage, live logs, no terminal required. See the [User Guide](docs/user_guide.md).
+- A **headless CLI runner** (`app/run_pipeline.sh`) — drives all four stages end-to-end for scripted/batch use.
+
+---
+
+## Repository Layout
+
+```
+Visual_lidar_calibration_tool/
+├── src/, include/                 # Backend: C++ calibration engine (camera models, vlcal core, CLI entrypoints)
+├── direct_visual_lidar_calibration/ # Backend: ROS 2 Python package namespace
+├── scripts/                       # Backend: Python helper (SuperGlue feature matching)
+├── cmake/                         # Backend: CMake find-modules (FindGTSAM.cmake)
+├── thirdparty/                    # Backend: vendored deps (nlohmann/json, nanoflann, Sophus)
+├── CMakeLists.txt                 # Backend: build definition (ament_cmake / catkin)
+├── docker/jazzy/                  # Backend: containerized ROS 2 (jazzy) build
+│
+├── gui/                           # Frontend: Tkinter desktop GUI (calibration_gui.py)
+├── app/                           # App layer: headless pipeline entrypoint (run_pipeline.sh)
+│
+├── docs/                          # User guide (Markdown + PDF) and screenshots
+├── LICENSE
+└── README.md
+```
+
+| Layer | Directory | Role |
+|:------|:----------|:-----|
+| Backend | `src/`, `include/`, `cmake/`, `thirdparty/`, `scripts/`, `direct_visual_lidar_calibration/`, `CMakeLists.txt` | The calibration engine itself: camera models, preprocessing, matching, optimization, and the `preprocess` / `find_matches_superglue.py` / `initial_guess_auto` / `calibrate` / `viewer` executables it builds. Packaged as a single ROS 2 (`ament_cmake`) / ROS 1 (`catkin`) package. |
+| Frontend | `gui/` | Desktop GUI that drives the backend executables as subprocesses and streams their logs. See [`gui/README.md`](gui/README.md). |
+| App | `app/` | Headless orchestration script that runs the same four stages non-interactively, with per-step timeouts and logging. See [`app/README.md`](app/README.md). |
+| Docs | `docs/` | End-user guide with screenshots, in both Markdown and PDF form. |
+
+> **Build note:** this repository does not currently include a ROS 2 `package.xml` manifest. `ament_auto_find_build_dependencies()` in `CMakeLists.txt` reads that manifest to resolve dependencies, so add a `package.xml` (declaring `pcl`, `opencv`, `gtsam`, `ceres`, `cv_bridge`, `sensor_msgs`, `rclcpp`, etc. as dependencies) before running `colcon build`.
 
 ---
 
@@ -16,7 +49,7 @@ This project addresses:
 - Targetless calibration in unstructured environments
 - Robust alignment under noisy and sparse LiDAR data
 - Real-world deployment using ROS2 sensor pipelines
-- Distributing the pipeline as a single portable binary instead of a multi-hour ROS2/GTSAM/Ceres source build
+- Making the pipeline approachable for non-experts via a point-and-click GUI, on top of the scriptable CLI stages
 
 Formally, the objective is to recover the rigid-body transform $T_{lidar}^{camera} \in SE(3)$ relating the LiDAR frame $L$ and camera frame $C$, such that a LiDAR point $p_L \in \mathbb{R}^3$ maps to the camera frame as $p_C = T_{camera}^{lidar} \, p_L$, and its pixel projection is $u = \pi(p_C)$ under the camera's intrinsic model $\pi(\cdot)$ (pinhole, fisheye, or omnidirectional). $T_{camera}^{lidar}$ has 6 degrees of freedom (3 rotation + 3 translation) and is estimated in three successive stages of increasing accuracy and decreasing convergence basin, described below.
 
@@ -75,10 +108,10 @@ The resulting $T_{lidar}^{camera}$ is validated by re-projecting the LiDAR point
   - segmentation alignment
   - centroid consistency
 
-### Portable AppImage Packaging
-- One-command Docker-based build turns the full pipeline into a single `.AppImage`
-- No system-wide ROS2, GTSAM, Ceres, or Python environment required on the target machine
-- Bundled CPU-only PyTorch stack for SuperGlue inference (no CUDA dependency)
+### Point-and-Click Desktop GUI
+- One button per pipeline stage, run any stage in any order
+- Live log tailing and per-step status indicators
+- Works against a native ROS 2 workspace or a bundled/AppImage-style environment (`$APPDIR`-aware)
 
 ---
 
@@ -111,72 +144,37 @@ The calibration pipeline runs as a sequence of CLI stages, each consuming the ou
 | 4. Fine registration | `calibrate <out_dir>` | Ceres-based NID optimization to refine the extrinsic transform |
 | 5. Inspection | `viewer <out_dir>` | Visual/cross-modal validation of the final calibration |
 
-Each stage writes into a shared `calib.json` in the output directory, ending with the final `T_lidar_camera` transform. See [`docs/programs.md`](docs/programs.md) and [`docs/example.md`](docs/example.md) for the full CLI options and a worked example.
+Each stage writes into a shared `calib.json` in the output directory, ending with the final `T_lidar_camera` transform.
 
-Stages 1–4 are exactly what the [AppImage's automated runner](#appimage-packaging) drives end-to-end. Stage 5 (`viewer`) is a separate manual inspection step, not part of that automated run.
+Stages 1–4 are exactly what [`app/run_pipeline.sh`](app/README.md) and the [desktop GUI](gui/README.md) drive end-to-end. Stage 5 (`viewer`) is a separate manual inspection step, not part of that automated run.
 
 ---
 
-## AppImage Packaging
+## Running the Pipeline
 
-The `packaging/` directory contains a self-contained Docker-based build system that produces a portable `dvcalib-pipeline-<target>-x86_64.AppImage`, bundling everything the pipeline needs — ROS2 (jazzy), GTSAM, Ceres, Iridescence, SuperGlue, and a CPU-only PyTorch/OpenCV/NumPy stack — so the calibration tool can be run on a target machine with no ROS2 or build toolchain installed.
-
-### How it works
-
-| File | Role |
-|:-----|:-----|
-| `Dockerfile.jazzy` | Builds a "donor" image: ROS2 jazzy base + GTSAM 4.2a9, Ceres, Iridescence built from source, the calibration workspace (`colcon build`), and SuperGlue cloned alongside it |
-| `build_appdir.sh` | Runs inside the donor container. Stages an `AppDir` by resolving the apt dependency closure (`dpkg -L`), copying ROS2 + the built workspace, copying the source-built libraries, bundling SuperGlue and a CPU PyTorch install, then runs an in-build sanity check before packaging with `appimagetool` |
-| `AppRun` | The AppImage entrypoint. Seals `PYTHONHOME`/`PYTHONPATH`/`LD_LIBRARY_PATH`/`AMENT_PREFIX_PATH` to the bundled ROS2/Python/GTSAM/Ceres/torch so nothing from the host environment leaks in, then hands off to `app/run_pipeline.sh` |
-| `dvcalib-pipeline.desktop` | Desktop entry metadata for the AppImage |
-| `build.sh` | Host-side driver: builds the donor image (cached after the first run) and runs the container to stage + package the AppImage into `../dist/` |
-
-`app/run_pipeline.sh` (bundled into the AppImage and copied into it during staging) drives the pipeline end-to-end: it runs each stage — `preprocess` → `find_matches_superglue.py` → `initial_guess_auto` → `calibrate` — as a supervised step with its own timeout, logging each step to `<output>/logs/`, then verifies that `calib.json` was produced.
-
-### Building the AppImage
+### Option A — Desktop GUI
+The friendliest entry point: one window, one button per stage, live logs, no terminal commands to remember. Full walkthrough with screenshots in the [User Guide](docs/user_guide.md).
 
 ```bash
-cd packaging
-./build.sh jazzy
+source /opt/ros/jazzy/setup.bash
+source ~/ros2_ws/install/setup.bash
+python3 gui/calibration_gui.py
 ```
 
-This produces `dist/dvcalib-pipeline-jazzy-x86_64.AppImage`. The donor Docker image is cached, so subsequent builds only re-run the staging/packaging step unless the Dockerfile changes.
-
-### Running the AppImage
-
-The AppImage runs the whole calibration pipeline end-to-end from a single command — point it at a directory of calibration bags and an output directory, and it drives `preprocess` → SuperGlue matching → `initial_guess_auto` → `calibrate` automatically, stopping each step once it finishes (or once its timeout elapses):
+### Option B — Headless CLI runner
+For scripted/batch runs (CI, remote machines, no display):
 
 ```bash
-chmod +x dvcalib-pipeline-jazzy-x86_64.AppImage
-
-./dvcalib-pipeline-jazzy-x86_64.AppImage --dataset livox --output livox_preprocessed
+./app/run_pipeline.sh --dataset /path/to/calibration_bags --output /path/to/output_dir
 ```
 
-| Option | Description |
-|:-------|:-------------|
-| `--dataset <dir>` | **Required.** Directory containing the calibration bags (e.g. `bag1`, `bag2`, ...) |
-| `--output <dir>` | **Required.** Directory to write processed output, logs, and the final `calib.json` |
-| `--preprocess-wait <sec>` | Timeout for the preprocess step (default 180) |
-| `--superglue-wait <sec>` | Timeout for the SuperGlue matching step (default 180) |
-| `--initial-guess-wait <sec>` | Timeout for the initial guess step (default 180) |
-| `--calibration-wait <sec>` | Timeout for the fine-registration step (default 180) |
-| `--kill-grace <sec>` | Grace period between SIGTERM and SIGKILL when a step's timeout expires (default 5) |
-| `--visualize` | Enable preprocess's live GLFW viewer (`-v`). Needs a real X11 display — off by default so the pipeline can run headless/in containers |
+See [`app/README.md`](app/README.md) for all options (per-step timeouts, `--visualize`, etc.).
 
-Each step's output is logged to `<output>/logs/0N_<step>.log`. On success, the run finishes with `<output>/calib.json` containing the final `T_lidar_camera` transform (see [Pipeline Stages](#pipeline-stages) above); if `calib.json` is missing at the end, the run reports the calibration as incomplete and points you at the logs.
-
-A few debug sub-commands are also built into `AppRun` itself:
-
-```bash
-./dvcalib-pipeline-jazzy-x86_64.AppImage --version   # print bundled ROS distro / Python version / build date
-./dvcalib-pipeline-jazzy-x86_64.AppImage --python    # run the bundled Python interpreter directly
-./dvcalib-pipeline-jazzy-x86_64.AppImage --shell     # drop into a shell with the bundled environment sourced
-```
-
-### Requirements on the target machine
-
-- x86_64 Linux with FUSE (or run with `--appimage-extract-and-run`)
-- No ROS2, GTSAM, Ceres, or Python environment needs to be pre-installed — everything is bundled
+Both entry points are written to also work when bundled into a self-contained AppImage-style
+distribution: they detect an `$APPDIR` environment variable and, when set, skip sourcing any
+workspace `setup.bash` and run directly against whatever environment the bundle already sealed in
+place. Building such a bundle is not part of this repository — `docker/jazzy/` covers building a
+containerized ROS 2 backend instead.
 
 ---
 
@@ -189,8 +187,9 @@ A few debug sub-commands are also built into `AppRun` itself:
 - [Ceres](http://ceres-solver.org/)
 - [Iridescence](https://github.com/koide3/iridescence)
 - [SuperGlue](https://github.com/magicleap/SuperGluePretrainedNetwork) [optional, non-commercial use only]
+- `python3-tk` — required only for the [desktop GUI](gui/README.md)
 
-If you don't want to build these from source, use the [AppImage](#appimage-packaging) instead.
+See [`docker/jazzy/Dockerfile`](docker/jazzy/Dockerfile) (and the `..._with_superglue` variant) for a known-working dependency set and build sequence on ROS 2 jazzy.
 
 ---
 
@@ -200,7 +199,7 @@ The core calibration algorithm (preprocessing, SuperGlue-based matching, RANSAC/
 
 > Koide et al., *General, Single-shot, Target-less, and Automatic LiDAR-Camera Extrinsic Calibration Toolbox*, ICRA2023. [[PDF]](https://staff.aist.go.jp/k.koide/assets/pdf/icra2023.pdf)
 
-The AppImage packaging pipeline (`packaging/`) is an addition on top of that project to make the tool distributable as a single portable binary.
+The desktop GUI (`gui/`), headless pipeline runner (`app/`), and this documentation are additions on top of that project to make the tool usable end-to-end without hand-typing ROS commands.
 
 ## References
 
@@ -210,4 +209,4 @@ The AppImage packaging pipeline (`packaging/`) is an addition on top of that pro
 
 ## License
 
-MIT — see the original project's license terms.
+MIT — see [`LICENSE`](LICENSE). SuperGlue is bundled/used optionally under its own non-commercial research license; review its terms before commercial use.
