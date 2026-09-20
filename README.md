@@ -199,6 +199,4 @@ See [`docker/jazzy/Dockerfile`](docker/jazzy/Dockerfile) (and the `..._with_supe
 2. P.-E. Sarlin, D. DeTone, T. Malisiewicz, A. Rabinovich. *SuperGlue: Learning Feature Matching with Graph Neural Networks.* CVPR 2020. [[arXiv:1911.11763]](https://arxiv.org/abs/1911.11763)
 3. S. Umeyama. *Least-Squares Estimation of Transformation Parameters Between Two Point Patterns.* IEEE TPAMI, 1991.
 
-## License
 
-MIT — see [`LICENSE`](LICENSE). SuperGlue is bundled/used optionally under its own non-commercial research license; review its terms before commercial use.
