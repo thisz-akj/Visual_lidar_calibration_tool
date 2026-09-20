@@ -193,14 +193,6 @@ See [`docker/jazzy/Dockerfile`](docker/jazzy/Dockerfile) (and the `..._with_supe
 
 ---
 
-## Attribution
-
-The core calibration algorithm (preprocessing, SuperGlue-based matching, RANSAC/SVD initial guess, Ceres/NID fine registration) originates from [koide3/direct_visual_lidar_calibration](https://github.com/koide3/direct_visual_lidar_calibration) by Kenji Koide (AIST), released under the MIT license:
-
-> Koide et al., *General, Single-shot, Target-less, and Automatic LiDAR-Camera Extrinsic Calibration Toolbox*, ICRA2023. [[PDF]](https://staff.aist.go.jp/k.koide/assets/pdf/icra2023.pdf)
-
-The desktop GUI (`gui/`), headless pipeline runner (`app/`), and this documentation are additions on top of that project to make the tool usable end-to-end without hand-typing ROS commands.
-
 ## References
 
 1. K. Koide, S. Oishi, M. Yokozuka, A. Banno. *General, Single-shot, Target-less, and Automatic LiDAR-Camera Extrinsic Calibration Toolbox.* ICRA 2023. [[PDF]](https://staff.aist.go.jp/k.koide/assets/pdf/icra2023.pdf)
